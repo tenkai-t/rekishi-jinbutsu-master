@@ -82,4 +82,15 @@ Promise.resolve([EMBEDDED_PEOPLE,EMBEDDED_PORTRAITS]).then(([data,imgs])=>{peopl
 
 document.addEventListener('click',e=>{const link=e.target.closest('[data-local-audit]');if(!link)return;e.preventDefault();let page='<!doctype html><html lang="ja"><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>全人物の画像・出典管理表</title><style>body{font:14px/1.8 sans-serif;background:#f5f2eb;padding:20px}main{display:grid;grid-template-columns:repeat(auto-fill,minmax(240px,1fr));gap:20px}article{background:#fffdf8;padding:20px;border:1px solid #ccc}img{width:100%;height:250px;object-fit:contain}small{overflow-wrap:anywhere}a{color:#245441}</style><h1>全人物の画像・出典管理表</h1><p>収録人物の画像一覧。後世の想像図・イメージ画像は本人の容貌を保証しません。</p><main>';for(const p of people){const a=imgFor(p);page+=`<article><h2>${esc(p.name)}</h2><small>ID: ${esc(p.id)}</small>${a?`<img src="${a.src}" alt="${esc(p.name)}"><p>${esc(a.type)}</p><p>作者：${esc(a.author)}<br>年代：${esc(a.date)}<br>所蔵・提供：${esc(a.institution)}</p><p>${esc(a.credit)}<br>${esc(a.license)}</p>${a.source?`<a href="${esc(a.source)}" target="_blank" rel="noopener">原資料 ↗</a>`:''} ${a.licenseUrl?`<a href="${esc(a.licenseUrl)}" target="_blank" rel="noopener">利用条件 ↗</a>`:''}<p>${esc(a.licenseBasis)}</p><p>${esc(a.identityNote)}</p><p>加工：${esc(a.changes)}<br>確認日：${esc(a.verified)}<br>区分：${a.quizMode==='standalone'?'画像問題':a.quizMode==='with-hints'?'ヒント併用':'図鑑専用'}</p>`:'画像未収録'}</article>`}page+='</main></html>';let url=URL.createObjectURL(new Blob([page],{type:'text/html;charset=utf-8'}));window.open(url,'_blank','noopener');setTimeout(()=>URL.revokeObjectURL(url),60000)});
 
-</script></body></html>
+</script>
+
+<script>
+// オフライン対応（Service Worker登録）
+if ('serviceWorker' in navigator) {
+  window.addEventListener('load', () => {
+    navigator.serviceWorker.register('./sw.js').catch(() => {});
+  });
+}
+</script>
+
+</body></html>
