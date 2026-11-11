@@ -6,4 +6,4 @@ compatibility_date = "2025-06-01"
 [[d1_databases]]
 binding = "DB"
 database_name = "rekishi-jinbutsu-ranking-db"
-database_id = "00000000-0000-0000-0000-000000000000"
+database_id = "37c1e9ae-3509-4938-8a4d-a30233478b60"
