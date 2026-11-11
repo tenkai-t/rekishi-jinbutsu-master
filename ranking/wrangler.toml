@@ -1,0 +1,9 @@
+name = "rekishi-jinbutsu-ranking"
+main = "src/index.js"
+compatibility_date = "2025-06-01"
+
+# ↓ database_id は、Cloudflareで D1 データベースを作成したときに表示されるIDに書き換えてください
+[[d1_databases]]
+binding = "DB"
+database_name = "rekishi-jinbutsu-ranking-db"
+database_id = "00000000-0000-0000-0000-000000000000"

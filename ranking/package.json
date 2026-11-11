@@ -1,0 +1,1 @@
+{"devDependencies":{"wrangler":"^3.114.0"},"name":"rekishi-jinbutsu-ranking","private":true,"scripts":{"deploy":"wrangler deploy"},"version":"1.0.0"}
