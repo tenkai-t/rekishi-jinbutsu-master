@@ -117,7 +117,7 @@ function rankPage() {
   return heading('ONLINE RANKING', 'オンラインランキング', '部門ごとに、みんなの記録と競おう。') +
     '<div class="rank-tabs"><span class="lbl">部門</span>' + tab('mode', '10', '10問（スコア）') + tab('mode', 'survival', '間違えるまで（正解数）') + '</div>' +
     '<div class="rank-tabs"><span class="lbl">コース</span>' + tab('course', 'any', 'すべて') + tab('course', 'japan', '日本史') + tab('course', 'world', '世界史') + tab('course', 'sengoku', '戦国') + '</div>' +
-    '<div class="rank-tabs"><span class="lbl">期間</span>' + tab('period', 'online', 'オンライン') + tab('period', 'month', '今月') + tab('period', 'device', 'この端末') + '</div>' +
+    '<div class="rank-tabs"><span class="lbl">期間</span>' + tab('period', 'online', 'オンライン') + tab('period', 'device', 'この端末') + '</div>' +
     '<div class="panel"><div id="rank-list"><p class="muted">読み込み中…</p></div><p class="rank-me" id="rank-me"></p></div>' +
     '<p class="muted">クイズの結果画面から記録を登録すると、ここに載ります。復習コースは対象外です。</p>';
 }
@@ -136,7 +136,6 @@ async function loadRanking() {
   listEl.innerHTML = '<p class="muted">読み込み中…</p>';
   try {
     const q = new URLSearchParams({ mode: view.mode, course: view.course, uuid: rankDeviceId() });
-    if (view.period === 'month') q.set('period', 'month');
     const res = await fetch(RANK_API + '/ranking?' + q.toString());
     const data = await res.json();
     if (!res.ok || !data || !Array.isArray(data.top)) throw new Error('bad response');
