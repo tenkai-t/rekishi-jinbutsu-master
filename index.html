@@ -11,6 +11,7 @@ const INDEX_KEY = 'history-quest:players:v1';
 const PLAYER_PREFIX = 'history-quest:player:v1:';
 const SECURITY_KEY = 'history-quest:security:v1';
 const ATTEMPTS_KEY = 'history-quest:security-attempts:v1';
+const USAGE_KEY = 'history-quest:usage-mode:v1';
 const LEGACY_KEY = 'history-quest-v1';
 const ITERATIONS = 600000;
 const ICON_GROUPS = {
@@ -65,6 +66,20 @@ function readSec() {
   } catch (e) { if (e && e.message && e.message.includes('保護設定')) throw e; return { schema: 1, players: {}, minutes: 5 }; }
 }
 function writeSec(x) { localStorage.setItem(SECURITY_KEY, JSON.stringify(x)); }
+// ---------- usage mode (利用モード：世界マスターと同方式) ----------
+// 端末ごとの選択で、保護設定とは別に保持する。未設定＋先生設定済み＝学童モード、
+// 未設定＋先生未設定＝初回に選択画面を出す（null）。
+let usageCache = undefined;
+function storedUsageMode() { try { const m = localStorage.getItem(USAGE_KEY); return m === 'school' || m === 'home' ? m : null; } catch (e) { return null; } }
+function usageMode() {
+  if (usageCache !== undefined) return usageCache;
+  let v = storedUsageMode();
+  if (!v) { try { v = readSec().admin ? 'school' : null; } catch (e) { v = null; } }
+  usageCache = v;
+  return v;
+}
+function setUsageMode(m) { try { localStorage.setItem(USAGE_KEY, m); } catch (e) {} usageCache = m; }
+const homeMode = () => usageMode() === 'home';
 function loadPlayerSave(id) {
   const raw = localStorage.getItem(playerKey(id));
   if (!raw) return blankSave();
@@ -149,6 +164,9 @@ function requireTeacher() { if (!isTeacher()) throw new Error('先生用パス�
     '.hq-strip{display:flex;gap:10px;align-items:center;justify-content:space-between;flex-wrap:wrap;margin:0 0 14px}' +
     '#hq-chip{margin-left:auto}' +
     '.hq-recovery{font-size:22px;letter-spacing:2px;font-weight:700;background:#fdf6e0;border:1px dashed var(--gold);padding:14px;text-align:center;overflow-wrap:anywhere}' +
+    '.hq-mode{display:block;width:100%;text-align:left;padding:16px;margin:10px 0;background:var(--white);border:1px solid var(--line);border-radius:8px;cursor:pointer;font:inherit;color:var(--ink)}' +
+    '.hq-mode b{display:block;font-size:18px;margin-bottom:6px}' +
+    '.hq-mode small{color:var(--muted);font-size:14px;line-height:1.6;display:block}' +
     'header{display:flex;align-items:center;gap:10px;flex-wrap:wrap}';
   document.head.appendChild(st);
   const ov = document.createElement('div'); ov.id = 'hq-overlay'; document.body.appendChild(ov);
@@ -202,18 +220,36 @@ function playerRowsHtml(query) {
   if (!rows.length) return '<p class="muted">プレイヤーが見つかりません。「追加する」から作成できます。</p>';
   return rows.map(p => '<div class="hq-player-row"><button class="hq-player-choice" data-hq-player="' + p.id + '"><span class="hq-avatar" aria-hidden="true">' + p.icon + '</span><span><b>' + esc(p.name) + '</b>' + (p.id === index.last ? '<small>前回のプレイヤー</small>' : '') + '</span></button></div>').join('');
 }
+function showModeChooser() {
+  hideScreen(); closeModal();
+  document.querySelector('main').innerHTML =
+    '<section class="panel" style="padding:26px">' +
+    '<span class="eyebrow">PLAYERS</span><h1 style="margin:6px 0">この端末の使い方を選んでください</h1>' +
+    '<p>学童で使うか、家で使うかを選んでください。あとから設定で変えることもできます。</p>' +
+    '<button class="hq-mode" id="hq-choose-school"><b>学童で使う（先生が管理）</b><small>先生用パスワードで管理します。子どものパスワードと自動ロックで、ほかの人の記録を守ります。最初に先生が1回だけ設定します。</small></button>' +
+    '<button class="hq-mode" id="hq-choose-home"><b>家で使う（管理しない）</b><small>パスワードなしで、名前を選ぶだけですぐ遊べます。家の自分の端末向けです。この端末を触れる人なら、誰でも記録を開けます。</small></button>' +
+    '</section>';
+  updateChip();
+  document.getElementById('hq-choose-school').addEventListener('click', () => { setUsageMode('school'); showPicker(); });
+  document.getElementById('hq-choose-home').addEventListener('click', () => { setUsageMode('home'); showPicker(); });
+}
 function showPicker() {
+  const mode = usageMode();
+  if (!mode) { showModeChooser(); return; }
+  const home = mode === 'home';
   hideScreen(); closeModal();
   document.querySelector('main').innerHTML =
     '<section class="panel" style="padding:26px">' +
     '<span class="eyebrow">PLAYERS</span><h1 style="margin:6px 0">だれが遊びますか？</h1>' +
-    '<p>自分の名前を選んで、つづきを学ぼう。</p>' +
+    (home ? '<p>自分の名前を選んで、つづきを学ぼう。</p>' : '<p>自分の名前を選び、パスワードを入力してください。</p>') +
     '<div class="hq-field"><label for="hq-search">名前で探す</label><input id="hq-search" class="hq-pin" type="search" placeholder="ニックネーム"></div>' +
     '<div id="hq-player-list">' + playerRowsHtml('') + '</div>' +
     '<div class="hq-row"><button class="btn primary" data-hq="guest">ゲストで遊ぶ</button>' +
     '<button class="btn" data-hq="add">＋ プレイヤーを追加する</button>' +
-    '<button class="btn" data-hq="teacher">先生用の管理</button></div>' +
-    '<p class="muted">記録はこの端末のブラウザ内に、プレイヤーごとに保存します。ニックネームで利用できます（本名や学校名は入力しなくて大丈夫です）。プレイヤーを選ぶときは、本人のパスワードが必要です。</p>' +
+    (home ? '' : '<button class="btn" data-hq="teacher">先生用の管理</button>') + '</div>' +
+    (home
+      ? '<p class="muted">家モード（管理しない）で使っています。パスワードは使いません。学童モードへの切り替えは、プレイヤーを選んでから設定でできます。</p>'
+      : '<p class="muted">記録はこの端末のブラウザ内に、プレイヤーごとに保存します。ニックネームで利用できます（本名や学校名は入力しなくて大丈夫です）。プレイヤーを選ぶときは、本人のパスワードが必要です。</p>') +
     '</section>';
   updateChip();
   const search = document.getElementById('hq-search');
@@ -221,7 +257,8 @@ function showPicker() {
   bindPlayerRows();
   document.querySelector('[data-hq="guest"]').addEventListener('click', startGuest);
   document.querySelector('[data-hq="add"]').addEventListener('click', () => profileForm(null, {}));
-  document.querySelector('[data-hq="teacher"]').addEventListener('click', teacherEntry);
+  const tBtn = document.querySelector('[data-hq="teacher"]');
+  if (tBtn) tBtn.addEventListener('click', teacherEntry);
 }
 function bindPlayerRows() {
   document.querySelectorAll('[data-hq-player]').forEach(b => b.addEventListener('click', () => selectPlayer(b.dataset.hqPlayer)));
@@ -244,6 +281,7 @@ function readNewPin(prefix, kind) {
 function selectPlayer(id) {
   const p = index.players.find(x => x.id === id);
   if (!p) return;
+  if (homeMode()) { enterPlayer(p); return; }
   let sec;
   try { sec = readSec(); } catch (e) { showError(e); return; }
   if (!sec.players[id]) { showModal('<h2>先生の設定が必要です</h2><p>' + esc(p.icon) + ' ' + esc(p.name) + ' のパスワードがまだ設定されていません。先生にパスワードを設定してもらってください。</p><div class="hq-row"><button class="btn primary" onclick="HQProfiles.closeModal()">閉じる</button><button class="btn" onclick="HQProfiles.teacherEntry()">先生用の管理</button></div>'); return; }
@@ -292,6 +330,18 @@ function doSwitch() {
   if (location.hash !== '#home') { try { history.replaceState(null, '', '#home'); } catch (e) {} }
   showPicker();
 }
+// ---------- usage mode switching ----------
+function switchUsageMode(target) {
+  if (target === 'home') requireTeacher();
+  setUsageMode(target);
+  closeModal();
+  doSwitch();
+}
+function confirmSwitchToSchool() {
+  showModal('<h2>学童モードに切り替えますか？</h2><p>学童モードでは、最初に先生用パスワードの設定が必要です。そのあと、各プレイヤーのパスワードを先生が設定するまで、記録は開けません。</p><p>学習記録はそのまま残ります。家モードに戻すときは、先生用パスワードが必要です。</p>' +
+    '<div class="hq-row"><button class="btn primary" id="hq-mode-school-ok">学童モードに切り替える</button><button class="btn" onclick="HQProfiles.closeModal()">キャンセル</button></div>');
+  document.getElementById('hq-mode-school-ok').addEventListener('click', () => { try { switchUsageMode('school'); } catch (e) { showError(e); } });
+}
 function switchPlayer() {
   if (!active) { showPicker(); return; }
   if (location.hash.startsWith('#quiz')) {
@@ -312,6 +362,35 @@ function updateChip() {
 function afterRender() {
   updateChip();
   const route = location.hash.slice(1) || 'home';
+  if (route === 'settings' && active) {
+    const main = document.querySelector('main');
+    if (main && !main.querySelector('.hq-mode-section')) {
+      const home = homeMode();
+      // 家モードでは先生用の管理ボタンを出さない
+      if (home) main.querySelectorAll('button').forEach(b => { if ((b.getAttribute('onclick') || '').includes('teacherEntry')) b.remove(); });
+      const first = main.querySelector('.settings-section');
+      if (first) {
+        const sec = document.createElement('section');
+        sec.className = 'panel settings-section hq-mode-section';
+        if (home) {
+          sec.innerHTML = '<h2>利用モード</h2><p>いまは「家モード（管理しない）」です。パスワードと自動ロックは使っていません。</p>' +
+            (active.guest ? '' : '<div class="actions"><button class="btn" id="hq-mode-to-school">学童モード（先生が管理）に切り替える</button></div>') +
+            '<p class="muted">切り替えると、最初に先生用パスワードの設定が必要になります。学習記録はそのまま残ります。</p>';
+        } else {
+          sec.innerHTML = '<h2>利用モード</h2><p>いまは「学童モード（先生が管理）」です。</p>' +
+            '<p class="muted">家モードへの切り替えは「先生用の管理」から、先生用パスワードで入ってから行えます。学習記録はそのまま残ります。</p>';
+        }
+        first.after(sec);
+        const btn = document.getElementById('hq-mode-to-school');
+        if (btn) btn.addEventListener('click', confirmSwitchToSchool);
+      }
+      if (home) {
+        main.querySelectorAll('.settings-section p.muted').forEach(p => {
+          if (p.textContent.includes('先生用の管理') && p.textContent.includes('読み込み')) p.textContent = '家モードでは、進捗の読み込み・初期化はできません。必要になったら学童モードに切り替えて、先生用の管理から行ってください。';
+        });
+      }
+    }
+  }
   if (route === 'home' && active) {
     const main = document.querySelector('main');
     if (main && !main.querySelector('.hq-strip')) {
@@ -325,7 +404,7 @@ function afterRender() {
 
 // ---------- auto lock ----------
 function lock() {
-  if (locked || !active || active.guest) return;
+  if (homeMode() || locked || !active || active.guest) return;
   locked = true; teacher = null;
   showScreen('<section class="panel" style="padding:26px"><span class="eyebrow">LOCKED</span><h1 style="margin:6px 0">ロックを解除</h1>' +
     '<p>' + esc(active.icon) + ' ' + esc(active.name) + '</p>' +
@@ -351,11 +430,13 @@ function startLockWatch() {
     if (isTeacher()) teacherActivity = Date.now();
   }, true));
   setInterval(() => {
+    if (homeMode()) return;
     try {
       if (active && !active.guest && !locked && Date.now() - lastActivity >= readSec().minutes * 60000) lock();
     } catch (e) { if (active && !active.guest) lock(); }
   }, 5000);
   document.addEventListener('visibilitychange', () => {
+    if (homeMode()) return;
     if (document.visibilityState === 'visible' && active && !active.guest && !locked) {
       try { if (Date.now() - lastActivity >= readSec().minutes * 60000) lock(); } catch (e) { lock(); }
     }
@@ -387,20 +468,21 @@ function profileForm(id, opts) {
   try {
     if (admin) requireTeacher();
     else if (id && (!active || active.guest || active.id !== id)) throw new Error('本人だけが変更できます。');
+    const home = homeMode();
     const sec = readSec();
-    if (!sec.admin) throw new Error('共有利用の前に、先生用の管理から初期設定をしてください。');
+    if (!home && !sec.admin) throw new Error('共有利用の前に、先生用の管理から初期設定をしてください。');
     const p = id ? index.players.find(x => x.id === id) : null;
     if (id && !p) throw new Error('プレイヤーが見つかりません。');
     showModal('<h2>' + (p ? '名前・アイコンの変更' : 'プレイヤーを追加') + '</h2>' +
       '<form id="hq-profile-form">' +
       '<div class="hq-field"><label for="hq-pname">ニックネーム（20文字まで・絵文字なし）</label><input id="hq-pname" class="hq-pin" maxlength="20" required autocomplete="off" value="' + esc(p ? p.name : '') + '"></div>' +
       '<div class="hq-field"><label>アイコンを選ぶ</label>' + iconGridHtml(p ? p.icon : '🌱') + '</div>' +
-      (p && !admin ? pinFormHtml('hq-confirm-pin', '本人のパスワード', '4〜10桁', false) : '') +
-      (!p ? pinFormHtml('hq-new-pin', '本人のパスワード', '4〜10桁', true) : '') +
-      '<p class="muted">本名や学校名は入力しなくて大丈夫です。パスワードを友達に教えないでください。</p>' +
+      (p && !admin && !home ? pinFormHtml('hq-confirm-pin', '本人のパスワード', '4〜10桁', false) : '') +
+      (!p && !home ? pinFormHtml('hq-new-pin', '本人のパスワード', '4〜10桁', true) : '') +
+      (home ? '<p class="muted">本名や学校名は入力しなくて大丈夫です。</p>' : '<p class="muted">本名や学校名は入力しなくて大丈夫です。パスワードを友達に教えないでください。</p>') +
       '<p class="hq-err" id="hq-profile-err"></p>' +
       '<div class="hq-row"><button class="btn primary" type="submit">' + (p ? '変更を保存' : '追加する') + '</button><button class="btn" type="button" onclick="HQProfiles.closeModal()">キャンセル</button></div></form>' +
-      (p && !admin ? '<div class="hq-row"><button class="btn" id="hq-own-password">パスワードを変更</button></div>' : ''));
+      (p && !admin && !home ? '<div class="hq-row"><button class="btn" id="hq-own-password">パスワードを変更</button></div>' : ''));
     bindIconGrid();
     const ownPw = document.getElementById('hq-own-password');
     if (ownPw) ownPw.addEventListener('click', () => passwordForm(id, false));
@@ -413,8 +495,8 @@ function profileForm(id, opts) {
         if (ne) throw new Error(ne);
         if (!ICONS.includes(chosenIcon)) throw new Error('アイコンを選んでください。');
         let verifier = null;
-        if (p && !admin) await check(id, document.getElementById('hq-confirm-pin').value);
-        if (!p) verifier = await makeVerifier(readNewPin('hq-new-pin', 'child'));
+        if (p && !admin && !home) await check(id, document.getElementById('hq-confirm-pin').value);
+        if (!p && !home) verifier = await makeVerifier(readNewPin('hq-new-pin', 'child'));
         const newId = id || uuid();
         const sec2 = readSec();
         if (!p && index.players.length >= 500) throw new Error('この端末では500人まで登録できます。');
@@ -423,8 +505,7 @@ function profileForm(id, opts) {
           if (!target) throw new Error('このプレイヤーは削除されています。');
           target.name = name; target.icon = chosenIcon;
         } else {
-          sec2.players[newId] = verifier;
-          writeSec(sec2);
+          if (!home) { sec2.players[newId] = verifier; writeSec(sec2); }
           storePlayerSave(newId, blankSave());
           index.players.push({ id: newId, name, icon: chosenIcon });
         }
@@ -476,6 +557,7 @@ function passwordForm(id, admin) {
 // ---------- teacher ----------
 function teacherEntry() {
   try {
+    if (homeMode()) throw new Error('家モードでは先生用の管理は使いません。学童モードに切り替えると使えます。');
     const sec = readSec();
     if (!sec.admin) { setupTeacher(); return; }
     if (isTeacher()) { teacherPanel(); return; }
@@ -561,6 +643,9 @@ function teacherPanel() {
       '<label class="btn">バックアップを読み込む<input type="file" id="hq-t-import" accept="application/json,.json" hidden></label>' +
       '<button class="btn" id="hq-t-legacy">移行前の記録を書き出す</button>' +
       '<button class="btn" id="hq-t-changepin">先生用パスワードを変更</button></div>' +
+      '<div class="hq-field"><label>利用モード</label>' +
+      '<p class="muted">いまは「学童モード（先生が管理）」です。家モードに切り替えると、この端末ではパスワードと自動ロックを使わなくなります。学習記録と先生用パスワードは残るので、学童モードに戻すときは今のパスワードで戻れます。</p>' +
+      '<div class="hq-row"><button class="btn" id="hq-t-to-home">家モード（管理しない）に切り替える</button></div></div>' +
       '<div class="hq-field"><label for="hq-t-minutes">操作しないときのロック</label>' +
       '<select id="hq-t-minutes" class="hq-pin">' + [1, 3, 5, 10, 15, 30, 60].map(n => '<option value="' + n + '"' + (sec.minutes === n ? ' selected' : '') + '>' + n + '分</option>').join('') + '</select></div>' +
       '<div class="hq-row"><button class="btn" id="hq-t-savemin">ロック時間を保存</button><button class="btn primary" onclick="HQProfiles.closeModal()">閉じる</button></div>' +
@@ -594,6 +679,7 @@ function teacherPanel() {
       catch (e) { showError(e); }
     });
     document.getElementById('hq-t-changepin').addEventListener('click', changeTeacherPin);
+    document.getElementById('hq-t-to-home').addEventListener('click', () => { try { switchUsageMode('home'); } catch (e) { showError(e); } });
     document.getElementById('hq-t-savemin').addEventListener('click', () => {
       try {
         requireTeacher();
@@ -734,18 +820,22 @@ function begin(ids) {
     header.appendChild(b);
   }
   startLockWatch();
+  window.addEventListener('storage', e => {
+    if (e.key === USAGE_KEY) { usageCache = undefined; if (!active) showPicker(); }
+  });
   showPicker();
 }
 
 return {
-  begin, closeModal, teacherEntry, editSelf, switchPlayer,
+  begin, closeModal, teacherEntry, editSelf, switchPlayer, confirmSwitchToSchool,
+  usageMode: () => usageMode(),
+  homeMode: () => homeMode(),
   currentId: () => (active ? active.id : null),
   currentName: () => (active ? active.name : ''),
   isGuest: () => !!(active && active.guest),
   isActive: () => !!active,
 };
 })();
-
 </script>
 <script>
 // ===== オンラインランキング（A案：名前＋端末UUID、Cloudflare Worker + D1） =====
