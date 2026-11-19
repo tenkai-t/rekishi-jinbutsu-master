@@ -1,6 +1,7 @@
 // 歴史人物マスター Service Worker（オフライン対応）
 // 初回アクセス時に本体とアイコンをキャッシュし、オフラインでも遊べるようにする。
 // ページ本体はオンライン時に最新を取りに行き、キャッシュも更新する（更新が届く仕組み）。
+// ページ取得は HTTP キャッシュを介さず再検証する。キャッシュが消えた場合はページ側が起動時・接続復帰時に自動で取り直す。
 const CACHE_NAME = 'rekishi-jinbutsu-master-v1';
 const CORE_FILES = [
   './',
@@ -39,7 +40,7 @@ self.addEventListener('fetch', (event) => {
   if (isPage) {
     // ページ本体: オンライン時は最新を取得してキャッシュも更新、オフライン時はキャッシュから返す
     event.respondWith(
-      fetch(req)
+      fetch(req, { cache: 'no-cache' })
         .then((res) => {
           const copy = res.clone();
           caches.open(CACHE_NAME).then((cache) => cache.put('./index.html', copy));

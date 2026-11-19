@@ -1102,10 +1102,36 @@ document.addEventListener('click',e=>{const link=e.target.closest('[data-local-a
 </script>
 
 <script>
-// オフライン対応（Service Worker登録）
-if ('serviceWorker' in navigator) {
+// オフライン対応（Service Worker登録・更新確認・保存の自動取り直し）
+if ('serviceWorker' in navigator && 'caches' in window) {
+  const HQ_CACHE_NAME = 'rekishi-jinbutsu-master-v1';
+  const HQ_CORE_FILES = ['./', './index.html', './manifest.webmanifest', './apple-touch-icon.png', './icon-192.png', './icon-512.png', './icon-maskable-512.png', './icon-32.png'];
+  let hqRegistration = null;
+  async function hqEnsureOffline() {
+    if (!navigator.onLine) return;
+    try {
+      const cache = await caches.open(HQ_CACHE_NAME);
+      for (const url of HQ_CORE_FILES) {
+        try {
+          if (await cache.match(url, { ignoreSearch: true })) continue;
+          const res = await fetch(url, { cache: 'no-cache' });
+          if (!res || !res.ok) continue;
+          const buf = await res.arrayBuffer();
+          await cache.put(url, new Response(buf, { status: res.status, statusText: res.statusText, headers: res.headers }));
+        } catch (e) { /* そのファイルは次回に回す */ }
+      }
+    } catch (e) { /* 失敗したら静かに次回へ回す */ }
+  }
   window.addEventListener('load', () => {
-    navigator.serviceWorker.register('./sw.js').catch(() => {});
+    navigator.serviceWorker.register('./sw.js').then((reg) => {
+      hqRegistration = reg;
+      reg.update().catch(() => {});
+    }).catch(() => {});
+    setTimeout(hqEnsureOffline, 3000);
+  });
+  window.addEventListener('online', () => {
+    if (hqRegistration) hqRegistration.update().catch(() => {});
+    hqEnsureOffline();
   });
 }
 </script>
